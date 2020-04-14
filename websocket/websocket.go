@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/joho/godotenv"
 	"log"
 	"os"
 
@@ -9,8 +10,18 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+	err := godotenv.Load("../.env")
+	if err != nil {
+		log.Println("could not load env file.")
+	}
+
+	token := os.Getenv("OAUTH_TOKEN")
+	userId := os.Getenv("USER_ID")
+	log.Println("token", token, "userId", userId)
+
 	api := slack.New(
-		"YOUR TOKEN HERE",
+		token,
 		slack.OptionDebug(true),
 		slack.OptionLog(log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)),
 	)
