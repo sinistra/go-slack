@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/slack-go/slack"
 )
@@ -16,8 +18,9 @@ func main() {
 		log.Println("could not load env file.")
 	}
 
-	token := os.Getenv("OAUTH_TOKEN")
+	token := os.Getenv("BOT_TOKEN")
 	userId := os.Getenv("USER_ID")
+	channelId := os.Getenv("CHANNEL_ID")
 	log.Println("token", token, "userId", userId)
 
 	api := slack.New(
@@ -30,19 +33,38 @@ func main() {
 	go rtm.ManageConnection()
 
 	for msg := range rtm.IncomingEvents {
-		fmt.Print("Event Received: ")
+		fmt.Println("Event Received: ")
 		switch ev := msg.Data.(type) {
 		case *slack.HelloEvent:
 			// Ignore hello
+			fmt.Println("RTM incoming => Hello event")
 
 		case *slack.ConnectedEvent:
 			fmt.Println("Infos:", ev.Info)
 			fmt.Println("Connection counter:", ev.ConnectionCount)
 			// Replace C2147483705 with your Channel ID
-			rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", "C2147483705"))
+			rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", channelId))
 
 		case *slack.MessageEvent:
-			fmt.Printf("Message: %v\n", ev)
+			fmt.Println("MessageEvent")
+			spew.Dump(ev)
+			fmt.Println(ev.Type, ev.SubType, ev.ClientMsgID, ev.User, ev.BotID, ev.Username, ev.Timestamp, ev.ThreadTimestamp)
+			if ev.SubType == "" && ev.BotID == "" && len(ev.ThreadTimestamp) > 0 {
+				log.Println("Do we have a reply to a message??")
+				resp := rtm.NewOutgoingMessage(fmt.Sprintf("reply to %s", ev.Text), ev.Channel)
+
+				// Respond in thread if not a direct message.
+				if !strings.HasPrefix(ev.Channel, "D") {
+					resp.ThreadTimestamp = ev.Timestamp
+				}
+
+				// Respond in same thread if message came from a thread.
+				if ev.ThreadTimestamp != "" {
+					resp.ThreadTimestamp = ev.ThreadTimestamp
+				}
+
+				rtm.SendMessage(resp)
+			}
 
 		case *slack.PresenceChangeEvent:
 			fmt.Printf("Presence Change: %v\n", ev)
@@ -57,13 +79,16 @@ func main() {
 			fmt.Printf("Error: %s\n", ev.Error())
 
 		case *slack.InvalidAuthEvent:
-			fmt.Printf("Invalid credentials")
+			fmt.Printf("Invalid credentials\n")
 			return
 
-		default:
+		case *slack.UserTypingEvent:
+			fmt.Printf("User typing - don't care\n")
 
+		default:
 			// Ignore other events..
-			// fmt.Printf("Unexpected: %v\n", msg.Data)
+			spew.Dump(ev)
+			fmt.Printf("Unexpected: %v\n", ev)
 		}
 	}
 }
