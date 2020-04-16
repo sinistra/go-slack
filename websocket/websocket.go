@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-	"github.com/joho/godotenv"
 	"log"
 	"os"
-	"strings"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/joho/godotenv"
 
 	"github.com/slack-go/slack"
 )
@@ -19,9 +19,9 @@ func main() {
 	}
 
 	token := os.Getenv("BOT_TOKEN")
-	userId := os.Getenv("USER_ID")
-	channelId := os.Getenv("CHANNEL_ID")
-	log.Println("token", token, "userId", userId)
+	userID := os.Getenv("USER_ID")
+	channelID := os.Getenv("CHANNEL_ID")
+	log.Println("token", token, "userId", userID)
 
 	api := slack.New(
 		token,
@@ -42,8 +42,7 @@ func main() {
 		case *slack.ConnectedEvent:
 			fmt.Println("Infos:", ev.Info)
 			fmt.Println("Connection counter:", ev.ConnectionCount)
-			// Replace C2147483705 with your Channel ID
-			rtm.SendMessage(rtm.NewOutgoingMessage("Hello world", channelId))
+			rtm.SendMessage(rtm.NewOutgoingMessage("Hello world, we're connected", channelID))
 
 		case *slack.MessageEvent:
 			fmt.Println("MessageEvent")
@@ -51,19 +50,40 @@ func main() {
 			fmt.Println(ev.Type, ev.SubType, ev.ClientMsgID, ev.User, ev.BotID, ev.Username, ev.Timestamp, ev.ThreadTimestamp)
 			if ev.SubType == "" && ev.BotID == "" && len(ev.ThreadTimestamp) > 0 {
 				log.Println("Do we have a reply to a message??")
-				resp := rtm.NewOutgoingMessage(fmt.Sprintf("reply to %s", ev.Text), ev.Channel)
+				msgText := fmt.Sprintf("bot update to %s", ev.Text)
+				// resp := rtm.NewOutgoingMessage(msgText, ev.Channel)
+				msgResponse := slack.MsgOptionText(msgText, false)
+				msgThumbNail := slack.MsgOptionIconURL("nms.com.au/images/thumbs-up20.jpg")
+				alert := slack.Attachment{
+					Fallback: "fallback text",
+					Color:    "#ff0000",
+					Title:    "attachment title",
+					Text:     "attachment text",
+					// ImageURL: "http://nms.com.au/favicon.png",
+					ThumbURL: "http://nms.com.au/images/thumbs-up20.jpg",
+					MarkdownIn: []string{
+						"text",
+						"pretext",
+						"fields",
+					},
+					Footer: "attachment footer",
+				}
+				msgAttachment := slack.MsgOptionAttachments(alert)
 
 				// Respond in thread if not a direct message.
-				if !strings.HasPrefix(ev.Channel, "D") {
-					resp.ThreadTimestamp = ev.Timestamp
-				}
+				// if !strings.HasPrefix(ev.Channel, "D") {
+				// resp.ThreadTimestamp = ev.Timestamp
+				// }
 
 				// Respond in same thread if message came from a thread.
-				if ev.ThreadTimestamp != "" {
-					resp.ThreadTimestamp = ev.ThreadTimestamp
-				}
+				// if ev.ThreadTimestamp != "" {
+				// resp.ThreadTimestamp = ev.ThreadTimestamp
+				// }
 
-				rtm.SendMessage(resp)
+				// rtm.PostMessage(ev.Channel, )
+
+				rtm.UpdateMessage(ev.Channel, ev.ThreadTimestamp, msgResponse, msgThumbNail, msgAttachment)
+				// rtm.SendMessage(resp)
 			}
 
 		case *slack.PresenceChangeEvent:
@@ -85,10 +105,13 @@ func main() {
 		case *slack.UserTypingEvent:
 			fmt.Printf("User typing - don't care\n")
 
+		case *slack.AckMessage:
+			fmt.Printf("AckMessage: Reply to %d, Timestamp:%s, Text:%s\n", ev.ReplyTo, ev.Timestamp, ev.Text)
+
 		default:
 			// Ignore other events..
+			fmt.Println("Unexpected event:")
 			spew.Dump(ev)
-			fmt.Printf("Unexpected: %v\n", ev)
 		}
 	}
 }
